@@ -1,0 +1,779 @@
+swagger: "2.0"
+info:
+  title: "API Raízes do Nordeste"
+  description: "Sistema Multicanal de Gestão de Pedidos — canais APP, TOTEM, BALCAO, PICKUP e WEB"
+  version: "1.0.0"
+basePath: "/"
+consumes:
+  - "application/json"
+produces:
+  - "application/json"
+securityDefinitions:
+  Bearer:
+    type: "apiKey"
+    name: "Authorization"
+    in: "header"
+    description: "Cole aqui: Bearer SEU_TOKEN"
+
+tags:
+  - name: "Auth"
+    description: "Cadastro e autenticação"
+  - name: "Produtos"
+    description: "Cardápio da rede"
+  - name: "Unidades"
+    description: "Unidades da rede"
+  - name: "Estoque"
+    description: "Controle de estoque por unidade"
+  - name: "Pedidos"
+    description: "Criação e gestão de pedidos multicanal"
+  - name: "Pagamentos"
+    description: "Integração de pagamento mock"
+  - name: "Fidelidade"
+    description: "Programa de pontos e resgates"
+
+paths:
+
+  /auth/register:
+    post:
+      tags: ["Auth"]
+      summary: "Cadastrar novo usuário"
+      parameters:
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            type: "object"
+            required: ["nome", "email", "senha", "consentimento_lgpd"]
+            properties:
+              nome:
+                type: "string"
+                example: "Maria Silva"
+              email:
+                type: "string"
+                example: "maria@email.com"
+              senha:
+                type: "string"
+                example: "Senha@123"
+              perfil:
+                type: "string"
+                enum: ["ADMIN", "GERENTE", "CLIENTE", "COZINHA", "ATENDENTE"]
+                example: "CLIENTE"
+              consentimento_lgpd:
+                type: "boolean"
+                example: true
+      responses:
+        201:
+          description: "Usuário criado"
+          schema:
+            type: "object"
+            properties:
+              id:
+                type: "integer"
+                example: 1
+              nome:
+                type: "string"
+                example: "Maria Silva"
+              email:
+                type: "string"
+                example: "maria@email.com"
+              perfil:
+                type: "string"
+                example: "CLIENTE"
+        409:
+          description: "E-mail já cadastrado"
+        422:
+          description: "Dados inválidos"
+
+  /auth/login:
+    post:
+      tags: ["Auth"]
+      summary: "Fazer login e obter token JWT"
+      parameters:
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            type: "object"
+            required: ["email", "senha"]
+            properties:
+              email:
+                type: "string"
+                example: "admin@raizes.com"
+              senha:
+                type: "string"
+                example: "Admin@2026"
+      responses:
+        200:
+          description: "Login realizado com sucesso"
+          schema:
+            type: "object"
+            properties:
+              accessToken:
+                type: "string"
+                example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+              tokenType:
+                type: "string"
+                example: "Bearer"
+              expiresIn:
+                type: "integer"
+                example: 3600
+              usuario:
+                type: "object"
+                properties:
+                  id:
+                    type: "integer"
+                    example: 1
+                  nome:
+                    type: "string"
+                    example: "Admin Raízes"
+                  perfil:
+                    type: "string"
+                    example: "ADMIN"
+        401:
+          description: "Credenciais inválidas"
+
+  /auth/me:
+    get:
+      tags: ["Auth"]
+      summary: "Ver meu perfil"
+      security:
+        - Bearer: []
+      responses:
+        200:
+          description: "Dados do usuário autenticado"
+        401:
+          description: "Não autenticado"
+
+  /produtos:
+    get:
+      tags: ["Produtos"]
+      summary: "Listar produtos ativos (cardápio por unidade)"
+      description: "Lista produtos do cardápio. Use ?unidade_id=N para ver o cardápio específico de uma unidade (retorna apenas produtos com estoque disponível, incluindo o saldo). Útil para unidades com cozinha reduzida que não oferecem todos os pratos."
+      parameters:
+        - name: "page"
+          in: "query"
+          type: "integer"
+          default: 1
+          example: 1
+        - name: "limit"
+          in: "query"
+          type: "integer"
+          default: 10
+          example: 10
+        - name: "unidade_id"
+          in: "query"
+          type: "integer"
+          description: "Filtra cardápio pela unidade (mostra só produtos com estoque > 0 e inclui campo estoque_disponivel)"
+          example: 1
+        - name: "categoria"
+          in: "query"
+          type: "string"
+          description: "Filtra produtos por categoria (busca parcial, case-insensitive)"
+          example: "Pratos"
+      responses:
+        200:
+          description: "Lista de produtos"
+          schema:
+            type: "object"
+            properties:
+              data:
+                type: "array"
+                items:
+                  type: "object"
+                  properties:
+                    id:
+                      type: "integer"
+                      example: 1
+                    nome:
+                      type: "string"
+                      example: "Baião de Dois"
+                    preco:
+                      type: "number"
+                      example: 29.90
+                    categoria:
+                      type: "string"
+                      example: "Pratos Principais"
+              total:
+                type: "integer"
+                example: 6
+              pagina:
+                type: "integer"
+                example: 1
+
+    post:
+      tags: ["Produtos"]
+      summary: "Criar produto (ADMIN/GERENTE)"
+      security:
+        - Bearer: []
+      parameters:
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            type: "object"
+            required: ["nome", "preco"]
+            properties:
+              nome:
+                type: "string"
+                example: "Cuscuz Nordestino"
+              descricao:
+                type: "string"
+                example: "Cuscuz com manteiga e queijo coalho"
+              preco:
+                type: "number"
+                example: 18.90
+              categoria:
+                type: "string"
+                example: "Lanches"
+      responses:
+        201:
+          description: "Produto criado"
+        401:
+          description: "Não autenticado"
+        403:
+          description: "Sem permissão"
+        422:
+          description: "Dados inválidos"
+
+  /produtos/{id}:
+    get:
+      tags: ["Produtos"]
+      summary: "Detalhe de um produto"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          example: 1
+      responses:
+        200:
+          description: "Produto encontrado"
+        404:
+          description: "Produto não encontrado"
+
+  /unidades:
+    get:
+      tags: ["Unidades"]
+      summary: "Listar unidades ativas da rede"
+      responses:
+        200:
+          description: "Lista de unidades"
+          schema:
+            type: "object"
+            properties:
+              data:
+                type: "array"
+                items:
+                  type: "object"
+                  properties:
+                    id:
+                      type: "integer"
+                      example: 1
+                    nome:
+                      type: "string"
+                      example: "Raízes Fortaleza Centro"
+                    cidade:
+                      type: "string"
+                      example: "Fortaleza"
+                    estado:
+                      type: "string"
+                      example: "CE"
+
+    post:
+      tags: ["Unidades"]
+      summary: "Criar unidade (ADMIN)"
+      security:
+        - Bearer: []
+      parameters:
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            type: "object"
+            required: ["nome", "cidade", "estado", "endereco"]
+            properties:
+              nome:
+                type: "string"
+                example: "Raízes Natal Centro"
+              cidade:
+                type: "string"
+                example: "Natal"
+              estado:
+                type: "string"
+                example: "RN"
+              endereco:
+                type: "string"
+                example: "Rua Chile, 45"
+      responses:
+        201:
+          description: "Unidade criada"
+        401:
+          description: "Não autenticado"
+        403:
+          description: "Sem permissão"
+
+  /estoque:
+    get:
+      tags: ["Estoque"]
+      summary: "Consultar estoque (ADMIN/GERENTE)"
+      security:
+        - Bearer: []
+      parameters:
+        - name: "unidade_id"
+          in: "query"
+          type: "integer"
+          example: 1
+        - name: "produto_id"
+          in: "query"
+          type: "integer"
+          example: 1
+      responses:
+        200:
+          description: "Estoque consultado"
+          schema:
+            type: "object"
+            properties:
+              data:
+                type: "array"
+                items:
+                  type: "object"
+                  properties:
+                    id:
+                      type: "integer"
+                      example: 1
+                    produto_id:
+                      type: "integer"
+                      example: 1
+                    unidade_id:
+                      type: "integer"
+                      example: 1
+                    quantidade:
+                      type: "integer"
+                      example: 50
+        401:
+          description: "Não autenticado"
+        403:
+          description: "Sem permissão"
+
+  /estoque/entrada:
+    post:
+      tags: ["Estoque"]
+      summary: "Registrar entrada de estoque (ADMIN/GERENTE)"
+      security:
+        - Bearer: []
+      parameters:
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            type: "object"
+            required: ["produto_id", "unidade_id", "quantidade"]
+            properties:
+              produto_id:
+                type: "integer"
+                example: 1
+              unidade_id:
+                type: "integer"
+                example: 1
+              quantidade:
+                type: "integer"
+                example: 50
+              motivo:
+                type: "string"
+                example: "Reposição semanal"
+      responses:
+        200:
+          description: "Entrada registrada"
+          schema:
+            type: "object"
+            properties:
+              estoque_id:
+                type: "integer"
+                example: 1
+              quantidade_atual:
+                type: "integer"
+                example: 100
+        404:
+          description: "Produto ou unidade não encontrado"
+        422:
+          description: "Quantidade inválida"
+
+  /estoque/saida:
+    post:
+      tags: ["Estoque"]
+      summary: "Registrar saída de estoque (ADMIN/GERENTE)"
+      security:
+        - Bearer: []
+      parameters:
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            type: "object"
+            required: ["produto_id", "unidade_id", "quantidade"]
+            properties:
+              produto_id:
+                type: "integer"
+                example: 1
+              unidade_id:
+                type: "integer"
+                example: 1
+              quantidade:
+                type: "integer"
+                example: 5
+              motivo:
+                type: "string"
+                example: "Perda por vencimento"
+      responses:
+        200:
+          description: "Saída registrada"
+        404:
+          description: "Produto ou unidade não encontrado"
+        409:
+          description: "Estoque insuficiente"
+
+  /pedidos:
+    post:
+      tags: ["Pedidos"]
+      summary: "Criar pedido — canalPedido OBRIGATÓRIO"
+      security:
+        - Bearer: []
+      parameters:
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            type: "object"
+            required: ["unidade_id", "canal_pedido", "itens"]
+            properties:
+              unidade_id:
+                type: "integer"
+                example: 1
+              canal_pedido:
+                type: "string"
+                enum: ["APP", "TOTEM", "BALCAO", "PICKUP", "WEB"]
+                example: "APP"
+              itens:
+                type: "array"
+                items:
+                  type: "object"
+                  required: ["produto_id", "quantidade"]
+                  properties:
+                    produto_id:
+                      type: "integer"
+                      example: 1
+                    quantidade:
+                      type: "integer"
+                      example: 2
+              observacao:
+                type: "string"
+                example: "Sem pimenta"
+      responses:
+        201:
+          description: "Pedido criado com sucesso"
+          schema:
+            type: "object"
+            properties:
+              id:
+                type: "integer"
+                example: 1
+              canal_pedido:
+                type: "string"
+                example: "APP"
+              status:
+                type: "string"
+                example: "AGUARDANDO_PAGAMENTO"
+              valor_total:
+                type: "number"
+                example: 59.80
+        401:
+          description: "Não autenticado"
+        404:
+          description: "Produto ou unidade não encontrado"
+        409:
+          description: "Estoque insuficiente"
+        422:
+          description: "canalPedido ausente ou inválido"
+
+    get:
+      tags: ["Pedidos"]
+      summary: "Listar pedidos com filtros"
+      security:
+        - Bearer: []
+      parameters:
+        - name: "canal_pedido"
+          in: "query"
+          type: "string"
+          enum: ["APP", "TOTEM", "BALCAO", "PICKUP", "WEB"]
+          example: "APP"
+        - name: "status"
+          in: "query"
+          type: "string"
+          enum: ["AGUARDANDO_PAGAMENTO", "PAGO", "EM_PREPARO", "PRONTO", "ENTREGUE", "CANCELADO"]
+          example: "AGUARDANDO_PAGAMENTO"
+        - name: "page"
+          in: "query"
+          type: "integer"
+          default: 1
+        - name: "limit"
+          in: "query"
+          type: "integer"
+          default: 10
+      responses:
+        200:
+          description: "Lista de pedidos"
+        401:
+          description: "Não autenticado"
+
+  /pedidos/{id}:
+    get:
+      tags: ["Pedidos"]
+      summary: "Detalhe de um pedido"
+      security:
+        - Bearer: []
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          example: 1
+      responses:
+        200:
+          description: "Pedido encontrado"
+        401:
+          description: "Não autenticado"
+        403:
+          description: "Sem permissão"
+        404:
+          description: "Pedido não encontrado"
+
+  /pedidos/{id}/status:
+    patch:
+      tags: ["Pedidos"]
+      summary: "Atualizar status do pedido (GERENTE/COZINHA/ADMIN/ATENDENTE)"
+      security:
+        - Bearer: []
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          example: 1
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            type: "object"
+            required: ["status"]
+            properties:
+              status:
+                type: "string"
+                enum: ["EM_PREPARO", "PRONTO", "ENTREGUE", "CANCELADO"]
+                example: "EM_PREPARO"
+      responses:
+        200:
+          description: "Status atualizado"
+          schema:
+            type: "object"
+            properties:
+              id:
+                type: "integer"
+                example: 1
+              status:
+                type: "string"
+                example: "EM_PREPARO"
+        401:
+          description: "Não autenticado"
+        403:
+          description: "Sem permissão"
+        404:
+          description: "Pedido não encontrado"
+        409:
+          description: "Transição de status inválida"
+
+  /pedidos/{id}/cancelar:
+    post:
+      tags: ["Pedidos"]
+      summary: "Cancelar pedido (operação sensível, exige motivo)"
+      description: "Cancela um pedido nos status AGUARDANDO_PAGAMENTO ou PAGO. Devolve o estoque para a unidade e registra log de auditoria com categoria CANCELAMENTO. Cliente só pode cancelar os próprios pedidos."
+      security:
+        - Bearer: []
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          example: 1
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            type: "object"
+            required: ["motivo"]
+            properties:
+              motivo:
+                type: "string"
+                description: "Justificativa do cancelamento (mínimo 5 caracteres)"
+                example: "Cliente desistiu antes do preparo"
+      responses:
+        200:
+          description: "Pedido cancelado com sucesso (estoque devolvido)"
+          schema:
+            type: "object"
+            properties:
+              mensagem:
+                type: "string"
+                example: "Pedido cancelado com sucesso."
+              motivo:
+                type: "string"
+                example: "Cliente desistiu antes do preparo"
+              estoque_devolvido:
+                type: "boolean"
+                example: true
+        401:
+          description: "Não autenticado"
+        403:
+          description: "Cliente tentando cancelar pedido de outro usuário"
+        404:
+          description: "Pedido não encontrado"
+        409:
+          description: "Pedido não pode ser cancelado no status atual (EM_PREPARO ou superior)"
+        422:
+          description: "Motivo ausente ou muito curto"
+
+  /pagamentos/mock:
+    post:
+      tags: ["Pagamentos"]
+      summary: "Processar pagamento mock — valor ≤ R$200 = APROVADO"
+      security:
+        - Bearer: []
+      parameters:
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            type: "object"
+            required: ["pedido_id"]
+            properties:
+              pedido_id:
+                type: "integer"
+                example: 1
+      responses:
+        200:
+          description: "Resultado do pagamento"
+          schema:
+            type: "object"
+            properties:
+              pagamento_id:
+                type: "integer"
+                example: 1
+              status:
+                type: "string"
+                enum: ["APROVADO", "RECUSADO"]
+                example: "APROVADO"
+              codigo_transacao:
+                type: "string"
+                example: "TRX-A1B2C3D4E5F6"
+              valor:
+                type: "number"
+                example: 59.80
+        401:
+          description: "Não autenticado"
+        404:
+          description: "Pedido não encontrado"
+        409:
+          description: "Pagamento já processado ou status inválido"
+
+  /fidelidade/{cliente_id}:
+    get:
+      tags: ["Fidelidade"]
+      summary: "Consultar pontos de fidelidade"
+      security:
+        - Bearer: []
+      parameters:
+        - name: "cliente_id"
+          in: "path"
+          required: true
+          type: "integer"
+          example: 4
+      responses:
+        200:
+          description: "Pontos do cliente"
+          schema:
+            type: "object"
+            properties:
+              cliente_id:
+                type: "integer"
+                example: 4
+              pontos_acumulados:
+                type: "integer"
+                example: 59
+              pontos_resgatados:
+                type: "integer"
+                example: 0
+              saldo_pontos:
+                type: "integer"
+                example: 59
+              equivalente_reais:
+                type: "number"
+                example: 5.90
+        401:
+          description: "Não autenticado"
+        404:
+          description: "Fidelidade não encontrada"
+
+  /fidelidade/resgatar:
+    post:
+      tags: ["Fidelidade"]
+      summary: "Resgatar pontos (mínimo 100 = R$10 de desconto)"
+      security:
+        - Bearer: []
+      parameters:
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            type: "object"
+            required: ["pontos"]
+            properties:
+              pontos:
+                type: "integer"
+                example: 100
+      responses:
+        200:
+          description: "Pontos resgatados"
+          schema:
+            type: "object"
+            properties:
+              pontos_resgatados:
+                type: "integer"
+                example: 100
+              desconto_aplicado:
+                type: "number"
+                example: 10.00
+              saldo_restante:
+                type: "integer"
+                example: 0
+        401:
+          description: "Não autenticado"
+        409:
+          description: "Saldo insuficiente"
+        422:
+          description: "Mínimo de 100 pontos"
+
+  /health:
+    get:
+      tags: ["Auth"]
+      summary: "Verificar saúde da API"
+      responses:
+        200:
+          description: "API funcionando"
+          schema:
+            type: "object"
+            properties:
+              status:
+                type: "string"
+                example: "ok"
+              servico:
+                type: "string"
+                example: "Raízes do Nordeste API"
